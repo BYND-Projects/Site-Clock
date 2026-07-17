@@ -1,0 +1,971 @@
+<!-- v2 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Site Clock</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap');
+
+  :root{
+    --ink:#22282D;
+    --paper:#F4F5F0;
+    --card:#FFFFFF;
+    --orange:#E8590C;
+    --orange-dark:#C64C0A;
+    --steel:#3E5C76;
+    --line:#D8D9D2;
+    --good:#2F9E44;
+    --bad:#C92A2A;
+    --muted:#6B7178;
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter',sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{
+    max-width:480px;
+    margin:0 auto;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+  }
+  .topbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:18px 20px 10px;
+  }
+  .brand{
+    font-family:'Archivo Black',sans-serif;
+    font-size:15px;
+    letter-spacing:0.5px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .brand .dot{width:9px;height:9px;background:var(--orange);border-radius:50%;display:inline-block;}
+  .admin-link{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--muted);
+    background:none;
+    border:1px solid var(--line);
+    border-radius:20px;
+    padding:6px 12px;
+    cursor:pointer;
+  }
+  .admin-link:hover{border-color:var(--steel);color:var(--steel);}
+  main{flex:1;padding:10px 20px 40px;display:flex;flex-direction:column;}
+
+  .hidden{display:none !important;}
+
+  /* ---- Loading ---- */
+  #loading{display:flex;align-items:center;justify-content:center;flex:1;color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:13px;}
+
+  /* ---- Clock digital readout ---- */
+  .site-name{font-family:'Archivo Black',sans-serif;font-size:22px;margin:6px 0 2px;line-height:1.15;}
+  .time-readout{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:44px;
+    font-weight:600;
+    letter-spacing:1px;
+    margin:14px 0 4px;
+  }
+  .date-readout{font-family:'IBM Plex Mono',monospace;color:var(--muted);font-size:13px;margin-bottom:22px;}
+
+  /* ---- Geofence status pill ---- */
+  .geo-pill{
+    display:flex;align-items:center;gap:10px;
+    padding:12px 16px;border-radius:14px;
+    background:var(--card);border:1px solid var(--line);
+    margin-bottom:18px;
+    font-size:13px;
+  }
+  .geo-pill .icon{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+  .geo-pill.ok .icon{background:var(--good);}
+  .geo-pill.bad .icon{background:var(--bad);}
+  .geo-pill.wait .icon{background:var(--muted);animation:pulse 1.4s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+  .geo-pill .txt{flex:1;line-height:1.4;}
+  .geo-pill .txt b{display:block;font-size:13px;}
+  .geo-pill .txt span{color:var(--muted);font-size:12px;}
+  .geo-pill button{
+    font-family:'Inter',sans-serif;font-size:12px;font-weight:600;
+    background:none;border:1px solid var(--steel);color:var(--steel);
+    border-radius:20px;padding:6px 12px;cursor:pointer;white-space:nowrap;
+  }
+
+  /* ---- Clock card ---- */
+  .clock-card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:20px;
+    padding:22px;
+  }
+  label.field-label{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.5px;
+    text-transform:uppercase;
+    color:var(--muted);
+    display:block;
+    margin-bottom:8px;
+  }
+  input[type=text], input[type=number], input[type=password]{
+    width:100%;
+    font-family:'Inter',sans-serif;
+    font-size:17px;
+    padding:13px 14px;
+    border:1.5px solid var(--line);
+    border-radius:10px;
+    background:var(--paper);
+    color:var(--ink);
+    outline:none;
+  }
+  input[type=text]:focus, input[type=number]:focus, input[type=password]:focus{border-color:var(--steel);}
+
+  .status-line{
+    margin-top:14px;
+    font-size:13px;
+    color:var(--muted);
+    min-height:18px;
+  }
+  .status-line b{color:var(--ink);}
+
+  .big-btn{
+    width:100%;
+    margin-top:18px;
+    padding:18px;
+    border:none;
+    border-radius:14px;
+    font-family:'Archivo Black',sans-serif;
+    font-size:17px;
+    letter-spacing:0.3px;
+    color:#fff;
+    cursor:pointer;
+    transition:transform .08s ease;
+  }
+  .big-btn:active{transform:scale(0.98);}
+  .big-btn.in{background:var(--good);}
+  .big-btn.out{background:var(--orange);}
+  .big-btn:disabled{background:var(--line);color:var(--muted);cursor:not-allowed;}
+
+  /* ---- Stamp confirmation ---- */
+  .stamp-overlay{
+    position:fixed;inset:0;background:rgba(34,40,45,0.85);
+    display:flex;align-items:center;justify-content:center;z-index:50;
+    padding:24px;
+  }
+  .ticket{
+    background:var(--paper);
+    width:100%;max-width:340px;
+    border-radius:4px;
+    padding:28px 24px 24px;
+    position:relative;
+    box-shadow:0 20px 60px rgba(0,0,0,.4);
+    animation:ticketDrop .35s cubic-bezier(.2,.9,.3,1.2);
+  }
+  @keyframes ticketDrop{from{transform:translateY(-30px) scale(.94);opacity:0;}to{transform:translateY(0) scale(1);opacity:1;}}
+  .ticket::before, .ticket::after{
+    content:"";position:absolute;width:20px;height:20px;background:rgba(34,40,45,0.85);
+    border-radius:50%;top:50%;transform:translateY(-50%);
+  }
+  .ticket::before{left:-10px;}
+  .ticket::after{right:-10px;}
+  .ticket .perf{border-top:2px dashed var(--line);margin:16px 0;}
+  .ticket .stamp{
+    font-family:'Archivo Black',sans-serif;
+    font-size:26px;
+    color:var(--orange);
+    border:3px solid var(--orange);
+    display:inline-block;
+    padding:6px 14px;
+    border-radius:6px;
+    transform:rotate(-4deg);
+    margin-bottom:10px;
+  }
+  .ticket.out .stamp{color:var(--steel);border-color:var(--steel);}
+  .ticket .name{font-family:'Archivo Black',sans-serif;font-size:19px;margin:6px 0 2px;}
+  .ticket .site{color:var(--muted);font-size:13px;margin-bottom:14px;}
+  .ticket .t-time{font-family:'IBM Plex Mono',monospace;font-size:30px;font-weight:600;}
+  .ticket .t-date{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted);margin-top:2px;}
+  .ticket .close-btn{
+    margin-top:20px;width:100%;padding:13px;border-radius:10px;border:none;
+    background:var(--ink);color:#fff;font-family:'Inter',sans-serif;font-weight:600;font-size:14px;cursor:pointer;
+  }
+
+  /* ---- Setup screen ---- */
+  .setup-box{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:24px;margin-top:8px;}
+  .setup-box h1{font-family:'Archivo Black',sans-serif;font-size:20px;margin:0 0 6px;}
+  .setup-box p.sub{color:var(--muted);font-size:13px;margin:0 0 20px;line-height:1.5;}
+  .field{margin-bottom:16px;}
+  .gps-row{display:flex;gap:10px;align-items:center;}
+  .gps-btn{
+    flex-shrink:0;font-family:'Inter',sans-serif;font-weight:600;font-size:13px;
+    background:var(--steel);color:#fff;border:none;border-radius:10px;padding:13px 16px;cursor:pointer;
+  }
+  .coords-readout{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted);margin-top:8px;}
+  input[type=range]{width:100%;accent-color:var(--orange);}
+  .radius-val{font-family:'IBM Plex Mono',monospace;font-weight:600;color:var(--orange);}
+
+  /* ---- Admin ---- */
+  .admin-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+  .admin-header h1{font-family:'Archivo Black',sans-serif;font-size:19px;margin:0;}
+  .tab-row{display:flex;gap:8px;margin-bottom:16px;}
+  .tab{
+    font-family:'Inter',sans-serif;font-size:13px;font-weight:600;padding:8px 14px;
+    border-radius:20px;border:1px solid var(--line);background:var(--card);cursor:pointer;color:var(--muted);
+  }
+  .tab.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:16px;}
+  .panel h2{font-family:'Archivo Black',sans-serif;font-size:14px;margin:0 0 12px;text-transform:uppercase;letter-spacing:0.4px;}
+
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{text-align:left;font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;color:var(--muted);padding:6px 4px;border-bottom:1px solid var(--line);}
+  td{padding:8px 4px;border-bottom:1px solid var(--line);font-family:'Inter',sans-serif;}
+  td.mono, th.mono{font-family:'IBM Plex Mono',monospace;}
+  .del-btn{background:none;border:none;color:var(--bad);cursor:pointer;font-size:16px;padding:2px 6px;}
+  .empty-note{color:var(--muted);font-size:13px;padding:10px 0;}
+
+  .btn-row{display:flex;gap:10px;flex-wrap:wrap;}
+  .btn-sec{
+    font-family:'Inter',sans-serif;font-weight:600;font-size:13px;padding:11px 16px;
+    border-radius:10px;border:1px solid var(--line);background:var(--paper);color:var(--ink);cursor:pointer;
+  }
+  .btn-sec.primary{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .btn-sec.danger{color:var(--bad);border-color:var(--bad);}
+
+  #qrbox{display:flex;justify-content:center;padding:18px 0;background:#fff;border-radius:12px;}
+  .print-instructions{font-size:12px;color:var(--muted);line-height:1.5;margin-top:10px;}
+
+  .pin-gate{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;text-align:center;}
+  .pin-gate h1{font-family:'Archivo Black',sans-serif;font-size:18px;margin-bottom:14px;}
+  .pin-gate input{max-width:220px;text-align:center;letter-spacing:4px;font-family:'IBM Plex Mono',monospace;}
+  .pin-gate .btn-sec{margin-top:14px;}
+  .err-msg{color:var(--bad);font-size:12px;margin-top:8px;min-height:16px;}
+
+  .back-link{background:none;border:none;color:var(--muted);font-family:'Inter',sans-serif;font-size:13px;cursor:pointer;margin-bottom:10px;text-align:left;padding:0;}
+  .back-link:hover{color:var(--ink);}
+
+  /* ---- Print ---- */
+  #print-area{display:none;}
+  @media print{
+    body *{visibility:hidden;}
+    #print-area, #print-area *{visibility:visible;}
+    #print-area{
+      display:flex !important;position:fixed;inset:0;flex-direction:column;
+      align-items:center;justify-content:center;background:#fff;
+    }
+    #print-area .p-site{font-family:'Archivo Black',sans-serif;font-size:34px;margin-bottom:6px;}
+    #print-area .p-sub{font-family:'Inter',sans-serif;font-size:16px;color:#444;margin-bottom:26px;}
+    #print-area .p-qr{margin-bottom:26px;}
+    #print-area .p-note{font-family:'IBM Plex Mono',monospace;font-size:13px;color:#555;}
+  }
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+
+  <div class="topbar">
+    <div class="brand"><span class="dot"></span>SITE CLOCK</div>
+    <button class="admin-link" id="openAdminBtn">Admin</button>
+  </div>
+
+  <main>
+
+    <div id="loading">Loading…</div>
+
+    <!-- ===================== SETUP ===================== -->
+    <div id="setup" class="hidden">
+      <div class="setup-box">
+        <h1>Set up this job site</h1>
+        <p class="sub">This runs once. Stand at the job site, capture its location, then print the QR code for staff to scan.</p>
+
+        <div class="field">
+          <label class="field-label">Job site name</label>
+          <input type="text" id="setupSiteName" placeholder="e.g. Riverside Warehouse">
+        </div>
+
+        <div class="field">
+          <label class="field-label">Site location</label>
+          <div class="gps-row">
+            <button class="gps-btn" id="captureGpsBtn">Capture current location</button>
+          </div>
+          <div class="coords-readout" id="setupCoordsReadout">Not captured yet — stand on site and tap capture.</div>
+        </div>
+
+        <div class="field">
+          <label class="field-label">Allowed radius: <span class="radius-val" id="radiusVal">150 m</span></label>
+          <input type="range" id="radiusSlider" min="30" max="500" step="10" value="150">
+        </div>
+
+        <div class="field">
+          <label class="field-label">Admin PIN (to view records later)</label>
+          <input type="password" id="setupPin" placeholder="4+ digits" inputmode="numeric">
+        </div>
+
+        <button class="big-btn in" id="saveSetupBtn">Save & start using</button>
+        <div class="err-msg" id="setupErr"></div>
+      </div>
+    </div>
+
+    <!-- ===================== CLOCK SCREEN ===================== -->
+    <div id="clockScreen" class="hidden">
+      <div class="site-name" id="clockSiteName">—</div>
+      <div class="time-readout" id="liveTime">--:--:--</div>
+      <div class="date-readout" id="liveDate">—</div>
+
+      <div class="geo-pill wait" id="geoPill">
+        <div class="icon"></div>
+        <div class="txt"><b id="geoTitle">Checking your location…</b><span id="geoSub">This confirms you're on site.</span></div>
+        <button id="geoRetryBtn" class="hidden">Retry</button>
+      </div>
+
+      <div class="clock-card">
+        <label class="field-label" for="staffName">Your name</label>
+        <input type="text" id="staffName" list="staffList" placeholder="Type your full name" autocomplete="off">
+        <datalist id="staffList"></datalist>
+
+        <div class="status-line" id="staffStatusLine"></div>
+
+        <button class="big-btn" id="clockActionBtn" disabled>Checking location…</button>
+      </div>
+    </div>
+
+    <!-- ===================== PIN GATE ===================== -->
+    <div id="pinGate" class="hidden pin-gate">
+      <h1>Admin access</h1>
+      <input type="password" id="pinInput" placeholder="PIN" inputmode="numeric">
+      <button class="btn-sec primary" id="pinSubmitBtn">Unlock</button>
+      <div class="err-msg" id="pinErr"></div>
+    </div>
+
+    <!-- ===================== ADMIN ===================== -->
+    <div id="adminScreen" class="hidden">
+      <button class="back-link" id="backToClockBtn">&larr; Back to clock screen</button>
+      <div class="admin-header"><h1 id="adminSiteName">Admin</h1></div>
+
+      <div class="tab-row">
+        <button class="tab active" data-tab="records">Records</button>
+        <button class="tab" data-tab="qr">QR code</button>
+        <button class="tab" data-tab="settings">Settings</button>
+      </div>
+
+      <!-- Records tab -->
+      <div class="tab-panel" id="tab-records">
+        <div class="panel">
+          <h2>Shifts (paired)</h2>
+          <div id="shiftsTableWrap"><div class="empty-note">No shifts yet.</div></div>
+        </div>
+        <div class="panel">
+          <h2>Raw log</h2>
+          <div id="rawTableWrap"><div class="empty-note">No entries yet.</div></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn-sec primary" id="exportCsvBtn">Export CSV</button>
+          <button class="btn-sec danger" id="clearAllBtn">Clear all records</button>
+        </div>
+      </div>
+
+      <!-- QR tab -->
+      <div class="tab-panel hidden" id="tab-qr">
+        <div class="panel">
+          <h2>Printable QR</h2>
+          <div class="field">
+            <label class="field-label">Link this QR points to</label>
+            <input type="text" id="qrUrlInput">
+            <div class="print-instructions">By default this is the page's current address. If you shared/published this app at a different link, paste that link above so the printed QR sends staff to the right place.</div>
+          </div>
+          <div id="qrbox"></div>
+          <div class="btn-row">
+            <button class="btn-sec primary" id="printQrBtn">Print QR sign</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Settings tab -->
+      <div class="tab-panel hidden" id="tab-settings">
+        <div class="panel">
+          <h2>Job site</h2>
+          <div class="field">
+            <label class="field-label">Site name</label>
+            <input type="text" id="settingsSiteName">
+          </div>
+          <div class="field">
+            <label class="field-label">Site location</label>
+            <div class="gps-row">
+              <button class="gps-btn" id="settingsCaptureBtn">Re-capture current location</button>
+            </div>
+            <div class="coords-readout" id="settingsCoordsReadout"></div>
+          </div>
+          <div class="field">
+            <label class="field-label">Allowed radius: <span class="radius-val" id="settingsRadiusVal"></span></label>
+            <input type="range" id="settingsRadiusSlider" min="30" max="500" step="10">
+          </div>
+          <button class="btn-sec primary" id="saveSettingsBtn">Save changes</button>
+          <div class="err-msg" id="settingsErr"></div>
+        </div>
+        <div class="panel">
+          <h2>Admin PIN</h2>
+          <div class="field">
+            <label class="field-label">New PIN</label>
+            <input type="password" id="newPinInput" placeholder="4+ digits" inputmode="numeric">
+          </div>
+          <button class="btn-sec" id="savePinBtn">Update PIN</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Stamp confirmation overlay -->
+<div id="stampOverlay" class="stamp-overlay hidden"></div>
+
+<!-- Print-only area -->
+<div id="print-area">
+  <div class="p-site" id="printSiteName">Job Site</div>
+  <div class="p-sub">Scan to clock in / clock out</div>
+  <div class="p-qr" id="printQrBox"></div>
+  <div class="p-note">Location must be verified on scan — this only works on site.</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+(function(){
+
+  // ---------- state ----------
+  let config = null;          // {siteName, lat, lng, radius, adminPin}
+  let entries = [];           // [{id,name,type,timestamp,lat,lng,distance}]
+  let unlocked = false;
+  let currentPos = null;
+  let geoWatchOk = false;
+
+  const $ = (id) => document.getElementById(id);
+  const show = (id) => $(id).classList.remove('hidden');
+  const hide = (id) => $(id).classList.add('hidden');
+
+  function haversine(lat1, lon1, lat2, lon2){
+    const R = 6371000;
+    const toRad = d => d * Math.PI/180;
+    const dLat = toRad(lat2-lat1);
+    const dLon = toRad(lon2-lon1);
+    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  function fmtTime(ts){
+    return new Date(ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  }
+  function fmtTimeShort(ts){
+    return new Date(ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  }
+  function fmtDate(ts){
+    return new Date(ts).toLocaleDateString([], {weekday:'short', month:'short', day:'numeric'});
+  }
+  function dayKey(ts){
+    const d = new Date(ts);
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+
+  // ---------- storage ----------
+  async function loadConfig(){
+    try{
+      const r = await window.storage.get('config', true);
+      config = r ? JSON.parse(r.value) : null;
+    }catch(e){ config = null; }
+  }
+  async function saveConfig(){
+    await window.storage.set('config', JSON.stringify(config), true);
+  }
+  async function loadEntries(){
+    try{
+      const r = await window.storage.get('entries', true);
+      entries = r ? JSON.parse(r.value) : [];
+    }catch(e){ entries = []; }
+  }
+  async function saveEntries(){
+    await window.storage.set('entries', JSON.stringify(entries), true);
+  }
+
+  // ---------- init ----------
+  async function init(){
+    await loadConfig();
+    await loadEntries();
+    hide('loading');
+    if(!config){
+      show('setup');
+    } else {
+      $('clockSiteName').textContent = config.siteName;
+      show('clockScreen');
+      startClock();
+      startGeoCheck();
+      populateStaffList();
+    }
+  }
+
+  function populateStaffList(){
+    const names = [...new Set(entries.map(e => e.name))].sort();
+    $('staffList').innerHTML = names.map(n => `<option value="${escapeHtml(n)}">`).join('');
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // ---------- live clock ----------
+  function startClock(){
+    function tick(){
+      const now = new Date();
+      $('liveTime').textContent = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+      $('liveDate').textContent = now.toLocaleDateString([], {weekday:'long', month:'long', day:'numeric'});
+    }
+    tick();
+    setInterval(tick, 1000);
+  }
+
+  // ---------- geofence ----------
+  function inIframe(){
+    try{ return window.self !== window.top; }catch(e){ return true; }
+  }
+
+  function startGeoCheck(){
+    if(!navigator.geolocation){
+      setGeoState('bad', 'Location not supported', 'This browser cannot check your location.');
+      return;
+    }
+    if(!window.isSecureContext){
+      setGeoState('bad', 'Insecure page', 'Location only works over https. Open this page via its https link.');
+      return;
+    }
+    // First attempt: high accuracy, reasonable timeout
+    navigator.geolocation.getCurrentPosition(onGeoSuccess, (err) => {
+      // Fallback attempt: lower accuracy, longer timeout — helps on weak GPS/indoors
+      navigator.geolocation.getCurrentPosition(onGeoSuccess, (err2) => onGeoError(err2), {enableHighAccuracy:false, timeout:25000, maximumAge:60000});
+    }, {enableHighAccuracy:true, timeout:12000, maximumAge:0});
+  }
+
+  function onGeoSuccess(pos){
+    currentPos = pos.coords;
+    const dist = haversine(config.lat, config.lng, currentPos.latitude, currentPos.longitude);
+    const accuracy = currentPos.accuracy || 0;
+    if(dist <= config.radius){
+      geoWatchOk = true;
+      setGeoState('ok', 'You\'re on site', `~${Math.round(dist)}m from site center.`);
+    } else {
+      geoWatchOk = false;
+      let sub = `You're ~${Math.round(dist)}m away — need to be within ${config.radius}m.`;
+      if(accuracy > config.radius){
+        sub += ` GPS accuracy is low (±${Math.round(accuracy)}m) — try moving outdoors.`;
+      }
+      setGeoState('bad', 'Not at the job site', sub);
+    }
+    updateClockBtn();
+  }
+
+  function onGeoError(err){
+    geoWatchOk = false;
+    let title = 'Location check failed';
+    let msg = err && err.message ? err.message : 'Unknown error.';
+    if(err && err.code === 1){
+      title = 'Permission blocked';
+      msg = inIframe()
+        ? 'This preview is running in an embedded frame, which can block location even if the site itself is allowed. Open the published link directly in your browser and try there.'
+        : 'Location is blocked for this page. Check your browser\'s site settings for this exact URL, and your device\'s system-level location settings for this browser.';
+    } else if(err && err.code === 2){
+      title = 'Location unavailable';
+      msg = 'Your device could not determine a location. Try moving outdoors or near a window.';
+    } else if(err && err.code === 3){
+      title = 'Timed out';
+      msg = 'Location took too long to respond. Tap retry — this is common on a weak signal.';
+    }
+    setGeoState('bad', title, msg + (err && err.code != null ? ` (code ${err.code})` : ''));
+    updateClockBtn();
+  }
+
+  function setGeoState(state, title, sub){
+    const pill = $('geoPill');
+    pill.classList.remove('ok','bad','wait');
+    pill.classList.add(state);
+    $('geoTitle').textContent = title;
+    $('geoSub').textContent = sub;
+    if(state === 'bad'){ show('geoRetryBtn'); } else { hide('geoRetryBtn'); }
+  }
+
+  $('geoRetryBtn').addEventListener('click', () => {
+    setGeoState('wait', 'Checking your location…', 'This confirms you\'re on site.');
+    hide('geoRetryBtn');
+    startGeoCheck();
+  });
+
+  // ---------- clock in/out ----------
+  function lastEntryFor(name){
+    const norm = name.trim().toLowerCase();
+    const mine = entries.filter(e => e.name.trim().toLowerCase() === norm);
+    if(mine.length === 0) return null;
+    return mine.reduce((a,b) => a.timestamp > b.timestamp ? a : b);
+  }
+
+  function updateClockBtn(){
+    const btn = $('clockActionBtn');
+    const name = $('staffName').value.trim();
+    if(!geoWatchOk){
+      btn.disabled = true;
+      btn.textContent = 'Move onto site to continue';
+      btn.className = 'big-btn';
+      $('staffStatusLine').innerHTML = '';
+      return;
+    }
+    if(!name){
+      btn.disabled = true;
+      btn.textContent = 'Enter your name';
+      btn.className = 'big-btn';
+      $('staffStatusLine').innerHTML = '';
+      return;
+    }
+    const last = lastEntryFor(name);
+    if(last && last.type === 'in'){
+      btn.disabled = false;
+      btn.textContent = 'Clock Out';
+      btn.className = 'big-btn out';
+      $('staffStatusLine').innerHTML = `Clocked in at <b>${fmtTimeShort(last.timestamp)}</b>`;
+    } else {
+      btn.disabled = false;
+      btn.textContent = 'Clock In';
+      btn.className = 'big-btn in';
+      $('staffStatusLine').innerHTML = last ? `Last clocked out at <b>${fmtTimeShort(last.timestamp)}</b>` : `First time clocking in`;
+    }
+  }
+
+  $('staffName').addEventListener('input', updateClockBtn);
+
+  $('clockActionBtn').addEventListener('click', async () => {
+    const name = $('staffName').value.trim();
+    if(!name || !geoWatchOk) return;
+    const last = lastEntryFor(name);
+    const type = (last && last.type === 'in') ? 'out' : 'in';
+    const entry = {
+      id: Date.now() + '-' + Math.random().toString(36).slice(2,8),
+      name, type,
+      timestamp: Date.now(),
+      lat: currentPos ? currentPos.latitude : null,
+      lng: currentPos ? currentPos.longitude : null,
+      distance: currentPos ? Math.round(haversine(config.lat, config.lng, currentPos.latitude, currentPos.longitude)) : null
+    };
+    $('clockActionBtn').disabled = true;
+    $('clockActionBtn').textContent = 'Saving…';
+    entries.push(entry);
+    await saveEntries();
+    populateStaffList();
+    showStamp(entry);
+    $('staffName').value = '';
+    updateClockBtn();
+  });
+
+  function showStamp(entry){
+    const overlay = $('stampOverlay');
+    overlay.innerHTML = `
+      <div class="ticket ${entry.type === 'out' ? 'out' : ''}">
+        <div class="stamp">${entry.type === 'in' ? 'IN' : 'OUT'}</div>
+        <div class="name">${escapeHtml(entry.name)}</div>
+        <div class="site">${escapeHtml(config.siteName)}</div>
+        <div class="perf"></div>
+        <div class="t-time">${fmtTime(entry.timestamp)}</div>
+        <div class="t-date">${fmtDate(entry.timestamp)}</div>
+        <button class="close-btn" id="stampCloseBtn">Done</button>
+      </div>
+    `;
+    overlay.classList.remove('hidden');
+    $('stampCloseBtn').addEventListener('click', () => overlay.classList.add('hidden'));
+  }
+
+  // ---------- admin: pin gate ----------
+  $('openAdminBtn').addEventListener('click', () => {
+    if(!config){ return; }
+    hide('clockScreen');
+    if(unlocked){
+      openAdmin();
+    } else {
+      show('pinGate');
+      $('pinInput').value = '';
+      $('pinErr').textContent = '';
+      $('pinInput').focus();
+    }
+  });
+
+  $('pinSubmitBtn').addEventListener('click', tryPin);
+  $('pinInput').addEventListener('keydown', e => { if(e.key === 'Enter') tryPin(); });
+
+  function tryPin(){
+    if($('pinInput').value === config.adminPin){
+      unlocked = true;
+      hide('pinGate');
+      openAdmin();
+    } else {
+      $('pinErr').textContent = 'Incorrect PIN.';
+    }
+  }
+
+  $('backToClockBtn').addEventListener('click', () => {
+    hide('adminScreen');
+    show('clockScreen');
+  });
+
+  // ---------- admin screen ----------
+  function openAdmin(){
+    $('adminSiteName').textContent = config.siteName + ' — Admin';
+    show('adminScreen');
+    renderRecords();
+    renderQr();
+    renderSettingsForm();
+  }
+
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+      tab.classList.add('active');
+      $('tab-' + tab.dataset.tab).classList.remove('hidden');
+    });
+  });
+
+  function renderRecords(){
+    // raw log, newest first
+    const sorted = [...entries].sort((a,b) => b.timestamp - a.timestamp);
+    if(sorted.length === 0){
+      $('rawTableWrap').innerHTML = '<div class="empty-note">No entries yet.</div>';
+    } else {
+      let rows = sorted.map(e => `
+        <tr>
+          <td>${escapeHtml(e.name)}</td>
+          <td class="mono">${e.type === 'in' ? 'Clock In' : 'Clock Out'}</td>
+          <td class="mono">${fmtDate(e.timestamp)}</td>
+          <td class="mono">${fmtTimeShort(e.timestamp)}</td>
+          <td class="mono">${e.distance != null ? e.distance+'m' : '—'}</td>
+          <td><button class="del-btn" data-id="${e.id}" title="Delete">✕</button></td>
+        </tr>
+      `).join('');
+      $('rawTableWrap').innerHTML = `
+        <table>
+          <thead><tr><th>Name</th><th class="mono">Type</th><th class="mono">Date</th><th class="mono">Time</th><th class="mono">Dist.</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+      $('rawTableWrap').querySelectorAll('.del-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          entries = entries.filter(e => e.id !== btn.dataset.id);
+          await saveEntries();
+          renderRecords();
+        });
+      });
+    }
+
+    // paired shifts
+    const byName = {};
+    entries.forEach(e => { (byName[e.name] = byName[e.name] || []).push(e); });
+    const shifts = [];
+    Object.keys(byName).forEach(name => {
+      const list = byName[name].sort((a,b) => a.timestamp - b.timestamp);
+      let openIn = null;
+      list.forEach(e => {
+        if(e.type === 'in'){ openIn = e; }
+        else if(e.type === 'out' && openIn){
+          shifts.push({name, in: openIn, out: e});
+          openIn = null;
+        }
+      });
+      if(openIn){ shifts.push({name, in: openIn, out: null}); }
+    });
+    shifts.sort((a,b) => b.in.timestamp - a.in.timestamp);
+
+    if(shifts.length === 0){
+      $('shiftsTableWrap').innerHTML = '<div class="empty-note">No shifts yet.</div>';
+    } else {
+      let rows = shifts.map(s => {
+        const hrs = s.out ? ((s.out.timestamp - s.in.timestamp) / 3600000).toFixed(2) : '—';
+        return `
+          <tr>
+            <td>${escapeHtml(s.name)}</td>
+            <td class="mono">${fmtDate(s.in.timestamp)}</td>
+            <td class="mono">${fmtTimeShort(s.in.timestamp)}</td>
+            <td class="mono">${s.out ? fmtTimeShort(s.out.timestamp) : 'still on'}</td>
+            <td class="mono">${hrs}</td>
+          </tr>
+        `;
+      }).join('');
+      $('shiftsTableWrap').innerHTML = `
+        <table>
+          <thead><tr><th>Name</th><th class="mono">Date</th><th class="mono">In</th><th class="mono">Out</th><th class="mono">Hrs</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    }
+  }
+
+  $('exportCsvBtn').addEventListener('click', () => {
+    let csv = 'Name,Type,Date,Time,Distance(m)\n';
+    [...entries].sort((a,b) => a.timestamp - b.timestamp).forEach(e => {
+      csv += `"${e.name}",${e.type},${fmtDate(e.timestamp)},${fmtTimeShort(e.timestamp)},${e.distance != null ? e.distance : ''}\n`;
+    });
+    const blob = new Blob([csv], {type:'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `${config.siteName.replace(/\s+/g,'_')}_timesheet.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  $('clearAllBtn').addEventListener('click', async () => {
+    if(!confirm('Delete ALL clock records? This cannot be undone.')) return;
+    entries = [];
+    await saveEntries();
+    renderRecords();
+    populateStaffList();
+  });
+
+  // ---------- QR ----------
+  function isLikelyValidUrl(u){
+    try{
+      const parsed = new URL(u);
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    }catch(e){ return false; }
+  }
+
+  function renderQr(){
+    const raw = ($('qrUrlInput').value || window.location.href.split('#')[0]).trim();
+    $('qrUrlInput').value = raw;
+    $('qrbox').innerHTML = '';
+    $('printQrBox').innerHTML = '';
+
+    if(!isLikelyValidUrl(raw)){
+      $('qrbox').innerHTML = `<div class="empty-note" style="padding:20px;">This doesn't look like a full web link (needs to start with https://). Paste your published link above.</div>`;
+      $('printSiteName').textContent = config.siteName;
+      return false;
+    }
+
+    // padded wrapper gives the QR its required quiet zone so scanners can lock onto it
+    const qrWrapMain = document.createElement('div');
+    qrWrapMain.style.padding = '16px';
+    qrWrapMain.style.background = '#ffffff';
+    $('qrbox').appendChild(qrWrapMain);
+    new QRCode(qrWrapMain, {text: raw, width: 220, height: 220, colorDark: '#22282D', colorLight: '#ffffff'});
+
+    const qrWrapPrint = document.createElement('div');
+    qrWrapPrint.style.padding = '24px';
+    qrWrapPrint.style.background = '#ffffff';
+    $('printQrBox').appendChild(qrWrapPrint);
+    new QRCode(qrWrapPrint, {text: raw, width: 280, height: 280, colorDark: '#000000', colorLight: '#ffffff'});
+
+    $('printSiteName').textContent = config.siteName;
+    return true;
+  }
+
+  $('qrUrlInput').addEventListener('change', renderQr);
+
+  $('printQrBtn').addEventListener('click', () => {
+    const ok = renderQr();
+    if(!ok){ return; }
+    // wait a couple of paint frames so the QR canvas is fully drawn before the print snapshot is taken
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      setTimeout(() => window.print(), 150);
+    }));
+  });
+
+  // ---------- settings ----------
+  let settingsCoords = null;
+
+  function renderSettingsForm(){
+    $('settingsSiteName').value = config.siteName;
+    $('settingsCoordsReadout').textContent = `Current: ${config.lat.toFixed(6)}, ${config.lng.toFixed(6)}`;
+    $('settingsRadiusSlider').value = config.radius;
+    $('settingsRadiusVal').textContent = config.radius + ' m';
+    settingsCoords = {lat: config.lat, lng: config.lng};
+  }
+
+  $('settingsRadiusSlider').addEventListener('input', () => {
+    $('settingsRadiusVal').textContent = $('settingsRadiusSlider').value + ' m';
+  });
+
+  $('settingsCaptureBtn').addEventListener('click', () => {
+    $('settingsCoordsReadout').textContent = 'Capturing…';
+    navigator.geolocation.getCurrentPosition(pos => {
+      settingsCoords = {lat: pos.coords.latitude, lng: pos.coords.longitude};
+      $('settingsCoordsReadout').textContent = `New: ${settingsCoords.lat.toFixed(6)}, ${settingsCoords.lng.toFixed(6)} (±${Math.round(pos.coords.accuracy)}m)`;
+    }, () => {
+      $('settingsCoordsReadout').textContent = 'Could not capture location — check permissions.';
+    }, {enableHighAccuracy:true, timeout:15000});
+  });
+
+  $('saveSettingsBtn').addEventListener('click', async () => {
+    const name = $('settingsSiteName').value.trim();
+    if(!name){ $('settingsErr').textContent = 'Site name is required.'; return; }
+    config.siteName = name;
+    config.lat = settingsCoords.lat;
+    config.lng = settingsCoords.lng;
+    config.radius = parseInt($('settingsRadiusSlider').value, 10);
+    await saveConfig();
+    $('settingsErr').textContent = 'Saved.';
+    setTimeout(() => $('settingsErr').textContent = '', 1800);
+    $('adminSiteName').textContent = config.siteName + ' — Admin';
+  });
+
+  $('savePinBtn').addEventListener('click', async () => {
+    const pin = $('newPinInput').value.trim();
+    if(pin.length < 4){ return; }
+    config.adminPin = pin;
+    await saveConfig();
+    $('newPinInput').value = '';
+  });
+
+  // ---------- setup screen ----------
+  let setupCoords = null;
+
+  $('radiusSlider').addEventListener('input', () => {
+    $('radiusVal').textContent = $('radiusSlider').value + ' m';
+  });
+
+  $('captureGpsBtn').addEventListener('click', () => {
+    $('setupCoordsReadout').textContent = 'Capturing…';
+    navigator.geolocation.getCurrentPosition(pos => {
+      setupCoords = {lat: pos.coords.latitude, lng: pos.coords.longitude};
+      $('setupCoordsReadout').textContent = `Captured: ${setupCoords.lat.toFixed(6)}, ${setupCoords.lng.toFixed(6)} (±${Math.round(pos.coords.accuracy)}m)`;
+    }, () => {
+      $('setupCoordsReadout').textContent = 'Could not get location — check browser permissions and try again.';
+    }, {enableHighAccuracy:true, timeout:15000});
+  });
+
+  $('saveSetupBtn').addEventListener('click', async () => {
+    const name = $('setupSiteName').value.trim();
+    const pin = $('setupPin').value.trim();
+    if(!name){ $('setupErr').textContent = 'Enter a site name.'; return; }
+    if(!setupCoords){ $('setupErr').textContent = 'Capture the site location first.'; return; }
+    if(pin.length < 4){ $('setupErr').textContent = 'PIN must be at least 4 digits.'; return; }
+    config = {
+      siteName: name,
+      lat: setupCoords.lat,
+      lng: setupCoords.lng,
+      radius: parseInt($('radiusSlider').value, 10),
+      adminPin: pin
+    };
+    await saveConfig();
+    hide('setup');
+    $('clockSiteName').textContent = config.siteName;
+    show('clockScreen');
+    startClock();
+    startGeoCheck();
+    populateStaffList();
+  });
+
+  init();
+})();
+</script>
+</body>
+</html>
