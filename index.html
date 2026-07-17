@@ -131,6 +131,24 @@
   }
   input[type=text]:focus, input[type=number]:focus, input[type=password]:focus{border-color:var(--steel);}
 
+  select{
+    width:100%;
+    font-family:'Inter',sans-serif;
+    font-size:17px;
+    padding:13px 14px;
+    border:1.5px solid var(--line);
+    border-radius:10px;
+    background:var(--paper);
+    color:var(--ink);
+    outline:none;
+    appearance:none;
+    -webkit-appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9'%3E%3Cpath d='M1 1L7 7L13 1' stroke='%236B7178' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;
+    background-position:right 14px center;
+  }
+  select:focus{border-color:var(--steel);}
+
   .status-line{
     margin-top:14px;
     font-size:13px;
@@ -323,18 +341,17 @@
       <div class="time-readout" id="liveTime">--:--:--</div>
       <div class="date-readout" id="liveDate">—</div>
 
-      <div class="geo-pill wait" id="geoPill">
+      <div class="geo-pill wait hidden" id="geoPill">
         <div class="icon"></div>
         <div class="txt"><b id="geoTitle">Checking your location…</b><span id="geoSub">This confirms you're on site.</span></div>
         <button id="geoRetryBtn" class="hidden">Retry</button>
       </div>
 
       <div class="clock-card">
-        <label class="field-label" for="staffName">Your name</label>
-        <input type="text" id="staffName" list="staffList" placeholder="Type your full name" autocomplete="off">
-        <datalist id="staffList"></datalist>
-
-        <div class="status-line" id="staffStatusLine"></div>
+        <select id="staffName">
+          <option value="">Choose your name…</option>
+        </select>
+        <div class="empty-note" id="noStaffNote" style="display:none;">No staff have been added yet. Ask your admin to add names under Admin &rarr; Settings.</div>
 
         <button class="big-btn" id="clockActionBtn" disabled>Checking location…</button>
       </div>
@@ -414,6 +431,17 @@
           <div class="err-msg" id="settingsErr"></div>
         </div>
         <div class="panel">
+          <h2>Staff list</h2>
+          <div class="field">
+            <label class="field-label">Add a name</label>
+            <div class="gps-row">
+              <input type="text" id="newStaffInput" placeholder="Full name">
+              <button class="gps-btn" id="addStaffBtn">Add</button>
+            </div>
+          </div>
+          <div id="staffRosterList"></div>
+        </div>
+        <div class="panel">
           <h2>Admin PIN</h2>
           <div class="field">
             <label class="field-label">New PIN</label>
@@ -441,6 +469,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
 (function(){
+
+  // ===== SET THIS to your deployed Google Apps Script Web App URL (ends in /exec) =====
+  const API_URL = "https://script.google.com/macros/s/AKfycbzXceanvdrKq6HfpE0r43fPfSiuv2GyzjnowBXr__7HwMyJ8ZPLPLbVE-OkHl0Teb5JlA/exec";
 
   // ---------- state ----------
   let config = null;          // {siteName, lat, lng, radius, adminPin}
@@ -476,30 +507,55 @@
     return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   }
 
-  // ---------- storage ----------
-  async function loadConfig(){
-    try{
-      const r = await window.storage.get('config', true);
-      config = r ? JSON.parse(r.value) : null;
-    }catch(e){ config = null; }
+  // ---------- storage (backed by Google Apps Script + Sheet) ----------
+  async function apiGetAll(){
+    const res = await fetch(`${API_URL}?action=getAll`);
+    if(!res.ok) throw new Error('Network error');
+    return res.json();
+  }
+  async function apiPost(payload){
+    // NOTE: body is sent as a plain string (default text/plain content-type)
+    // on purpose — a JSON content-type would trigger a CORS preflight that
+    // Apps Script web apps don't handle, and the request would fail silently.
+    const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
+    if(!res.ok) throw new Error('Network error');
+    return res.json();
+  }
+
+  async function loadAll(){
+    const data = await apiGetAll();
+    config = data.config;
+    entries = data.entries || [];
   }
   async function saveConfig(){
-    await window.storage.set('config', JSON.stringify(config), true);
+    await apiPost({ action: 'saveConfig', config });
   }
-  async function loadEntries(){
-    try{
-      const r = await window.storage.get('entries', true);
-      entries = r ? JSON.parse(r.value) : [];
-    }catch(e){ entries = []; }
+  async function remoteAddEntry(entry){
+    await apiPost({ action: 'addEntry', entry });
   }
-  async function saveEntries(){
-    await window.storage.set('entries', JSON.stringify(entries), true);
+  async function remoteDeleteEntry(id){
+    await apiPost({ action: 'deleteEntry', id });
+  }
+  async function remoteClearAll(){
+    await apiPost({ action: 'clearAll' });
   }
 
   // ---------- init ----------
   async function init(){
-    await loadConfig();
-    await loadEntries();
+    if(API_URL.indexOf('PASTE_YOUR') === 0){
+      hide('loading');
+      document.querySelector('main').innerHTML =
+        '<div class="empty-note" style="padding:24px;">This app isn\'t connected to its data source yet. Open the file and set API_URL near the top of the script to your deployed Apps Script Web App URL.</div>';
+      return;
+    }
+    try{
+      await loadAll();
+    }catch(e){
+      hide('loading');
+      document.querySelector('main').innerHTML =
+        '<div class="empty-note" style="padding:24px;">Could not reach the data server. Check your internet connection and reload. If this keeps happening, the Apps Script deployment URL may need to be redeployed.</div>';
+      return;
+    }
     hide('loading');
     if(!config){
       show('setup');
@@ -513,8 +569,14 @@
   }
 
   function populateStaffList(){
-    const names = [...new Set(entries.map(e => e.name))].sort();
-    $('staffList').innerHTML = names.map(n => `<option value="${escapeHtml(n)}">`).join('');
+    const names = (config.staffList || []).slice().sort((a,b) => a.localeCompare(b));
+    const sel = $('staffName');
+    const currentVal = sel.value;
+    sel.innerHTML = '<option value="">Choose your name…</option>' +
+      names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+    if(names.includes(currentVal)){ sel.value = currentVal; }
+    $('noStaffNote').style.display = names.length === 0 ? 'block' : 'none';
+    sel.style.display = names.length === 0 ? 'none' : 'block';
   }
 
   function escapeHtml(s){
@@ -598,6 +660,8 @@
     $('geoTitle').textContent = title;
     $('geoSub').textContent = sub;
     if(state === 'bad'){ show('geoRetryBtn'); } else { hide('geoRetryBtn'); }
+    // keep the pill hidden entirely when everything's fine — only surface it as a blocker
+    if(state === 'ok'){ hide('geoPill'); } else { show('geoPill'); }
   }
 
   $('geoRetryBtn').addEventListener('click', () => {
@@ -621,14 +685,12 @@
       btn.disabled = true;
       btn.textContent = 'Move onto site to continue';
       btn.className = 'big-btn';
-      $('staffStatusLine').innerHTML = '';
       return;
     }
     if(!name){
       btn.disabled = true;
-      btn.textContent = 'Enter your name';
+      btn.textContent = 'Select your name to continue';
       btn.className = 'big-btn';
-      $('staffStatusLine').innerHTML = '';
       return;
     }
     const last = lastEntryFor(name);
@@ -636,16 +698,14 @@
       btn.disabled = false;
       btn.textContent = 'Clock Out';
       btn.className = 'big-btn out';
-      $('staffStatusLine').innerHTML = `Clocked in at <b>${fmtTimeShort(last.timestamp)}</b>`;
     } else {
       btn.disabled = false;
       btn.textContent = 'Clock In';
       btn.className = 'big-btn in';
-      $('staffStatusLine').innerHTML = last ? `Last clocked out at <b>${fmtTimeShort(last.timestamp)}</b>` : `First time clocking in`;
     }
   }
 
-  $('staffName').addEventListener('input', updateClockBtn);
+  $('staffName').addEventListener('change', updateClockBtn);
 
   $('clockActionBtn').addEventListener('click', async () => {
     const name = $('staffName').value.trim();
@@ -662,11 +722,15 @@
     };
     $('clockActionBtn').disabled = true;
     $('clockActionBtn').textContent = 'Saving…';
-    entries.push(entry);
-    await saveEntries();
-    populateStaffList();
-    showStamp(entry);
-    $('staffName').value = '';
+    try{
+      await remoteAddEntry(entry);
+      entries.push(entry);
+      populateStaffList();
+      showStamp(entry);
+      $('staffName').value = '';
+    }catch(err){
+      alert('Could not save — check your internet connection and try again.');
+    }
     updateClockBtn();
   });
 
@@ -726,6 +790,7 @@
     renderRecords();
     renderQr();
     renderSettingsForm();
+    renderStaffRoster();
   }
 
   document.querySelectorAll('.tab').forEach(tab => {
@@ -761,9 +826,11 @@
       `;
       $('rawTableWrap').querySelectorAll('.del-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
-          entries = entries.filter(e => e.id !== btn.dataset.id);
-          await saveEntries();
-          renderRecords();
+          try{
+            await remoteDeleteEntry(btn.dataset.id);
+            entries = entries.filter(e => e.id !== btn.dataset.id);
+            renderRecords();
+          }catch(err){ alert('Could not delete — check your connection.'); }
         });
       });
     }
@@ -825,10 +892,12 @@
 
   $('clearAllBtn').addEventListener('click', async () => {
     if(!confirm('Delete ALL clock records? This cannot be undone.')) return;
-    entries = [];
-    await saveEntries();
-    renderRecords();
-    populateStaffList();
+    try{
+      await remoteClearAll();
+      entries = [];
+      renderRecords();
+      populateStaffList();
+    }catch(err){ alert('Could not clear records — check your connection.'); }
   });
 
   // ---------- QR ----------
@@ -925,6 +994,53 @@
     $('newPinInput').value = '';
   });
 
+  // ---------- staff roster ----------
+  function renderStaffRoster(){
+    const names = (config.staffList || []).slice().sort((a,b) => a.localeCompare(b));
+    if(names.length === 0){
+      $('staffRosterList').innerHTML = '<div class="empty-note">No staff added yet.</div>';
+      return;
+    }
+    $('staffRosterList').innerHTML = `
+      <table>
+        <tbody>
+          ${names.map(n => `
+            <tr>
+              <td>${escapeHtml(n)}</td>
+              <td style="text-align:right;"><button class="del-btn" data-name="${escapeHtml(n)}" title="Remove">✕</button></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+    $('staffRosterList').querySelectorAll('.del-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if(!confirm(`Remove ${btn.dataset.name} from the staff list? Their past records are kept.`)) return;
+        config.staffList = (config.staffList || []).filter(n => n !== btn.dataset.name);
+        try{
+          await saveConfig();
+          renderStaffRoster();
+          populateStaffList();
+        }catch(err){ alert('Could not save — check your connection.'); }
+      });
+    });
+  }
+
+  $('addStaffBtn').addEventListener('click', async () => {
+    const name = $('newStaffInput').value.trim();
+    if(!name) return;
+    config.staffList = config.staffList || [];
+    const exists = config.staffList.some(n => n.toLowerCase() === name.toLowerCase());
+    if(exists){ $('newStaffInput').value = ''; return; }
+    config.staffList.push(name);
+    try{
+      await saveConfig();
+      $('newStaffInput').value = '';
+      renderStaffRoster();
+      populateStaffList();
+    }catch(err){ alert('Could not save — check your connection.'); }
+  });
+
   // ---------- setup screen ----------
   let setupCoords = null;
 
@@ -953,7 +1069,8 @@
       lat: setupCoords.lat,
       lng: setupCoords.lng,
       radius: parseInt($('radiusSlider').value, 10),
-      adminPin: pin
+      adminPin: pin,
+      staffList: []
     };
     await saveConfig();
     hide('setup');
